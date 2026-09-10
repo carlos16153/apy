@@ -373,6 +373,22 @@
         return null;
       }
 
+      function hablarTexto(texto) {
+        const textoLimpio = (texto || '').trim();
+
+        if (!textoLimpio || !('speechSynthesis' in window)) {
+          return false;
+        }
+
+        window.speechSynthesis.cancel();
+        const mensaje = new SpeechSynthesisUtterance(textoLimpio);
+        mensaje.lang = 'es-ES';
+        mensaje.rate = 1;
+        mensaje.pitch = 1;
+        window.speechSynthesis.speak(mensaje);
+        return true;
+      }
+
       async function applyVoiceCommand(commandText) {
         const text = commandText.trim();
         if (!text) return;
@@ -381,6 +397,7 @@
         voiceOutput.textContent = `He oído: "${text}"`;
 
         if (normalized.includes('actualizar clima') || normalized.includes('refrescar clima') || normalized.includes('actualiza el clima')) {
+          hablarTexto('Actualizando clima');
           await loadWeather();
           return;
         }
@@ -388,16 +405,19 @@
         const city = extractCityFromCommand(text);
         if (city) {
           voiceOutput.textContent = `Buscando clima en ${city}...`;
+          hablarTexto(`Buscando clima en ${city}`);
           await fetchWeatherByCity(city);
           return;
         }
 
         if (normalized.includes('mostrar palabras') || normalized.includes('qué dijiste') || normalized.includes('repite')) {
           voiceOutput.textContent = `La última frase fue: "${text}"`;
+          hablarTexto(`La última frase fue ${text}`);
           return;
         }
 
         voiceOutput.textContent = `Comando no reconocido: "${text}"`;
+        hablarTexto('Comando no reconocido');
       }
 
       function renderHours(dataList) {
