@@ -220,7 +220,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: 10px;
         margin-bottom: 10px;
       }
 
@@ -235,21 +235,25 @@
       .voice-btn {
         border: none;
         border-radius: 999px;
-        padding: 8px 12px;
+        width: 54px;
+        height: 54px;
+        display: grid;
+        place-items: center;
         background: linear-gradient(135deg, var(--primary), var(--secondary));
         color: white;
         font-weight: 700;
         cursor: pointer;
+        box-shadow: 0 10px 20px rgba(56, 189, 248, 0.35);
       }
 
       .voice-output {
-        min-height: 68px;
+        min-height: 74px;
         border-radius: 12px;
         background: rgba(15, 23, 42, 0.65);
         border: 1px solid rgba(148, 163, 184, 0.12);
-        padding: 10px 12px;
+        padding: 12px 14px;
         color: var(--text);
-        line-height: 1.5;
+        line-height: 1.6;
         font-size: 0.9rem;
       }
 
@@ -303,6 +307,8 @@
           <div class="hours-grid" id="hoursList"></div>
         </div>
 
+        <button class="refresh-btn" id="refreshBtn" type="button">Actualizar clima</button>
+
         <div class="voice-box">
           <div class="voice-header">
             <p class="voice-title">Habla</p>
@@ -310,8 +316,6 @@
           </div>
           <div class="voice-output" id="voiceOutput">Aquí aparecerán las palabras que digas.</div>
         </div>
-
-        <button class="refresh-btn" id="refreshBtn" type="button">Actualizar clima</button>
       </div>
     </div>
 
@@ -345,6 +349,55 @@
         windEl.textContent = `${wind} km/h`;
         maxTempEl.textContent = `${max}°C`;
         weatherIcon.src = `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`;
+      }
+
+      function extractCityFromCommand(text) {
+        const cleaned = text.toLowerCase();
+
+        const patterns = [
+          /(?:ciudad|lugar|buscar|clima en|tiempo en|en)\s+([a-záéíóúñü\s]+)/i,
+          /(?:ciudad\s+es|lugar\s+es)\s+([a-záéíóúñü\s]+)/i,
+          /(?:actualiza|cambia|pon)\s+(?:la\s+)?(?:ciudad|lugar)\s+(?:a\s+)?([a-záéíóúñü\s]+)/i
+        ];
+
+        for (const pattern of patterns) {
+          const match = cleaned.match(pattern);
+          if (match && match[1]) {
+            const city = match[1].trim();
+            if (city && city !== 'de' && city !== 'la' && city !== 'el') {
+              return city.replace(/\s+/g, ' ');
+            }
+          }
+        }
+
+        return null;
+      }
+
+      async function applyVoiceCommand(commandText) {
+        const text = commandText.trim();
+        if (!text) return;
+
+        const normalized = text.toLowerCase();
+        voiceOutput.textContent = `He oído: "${text}"`;
+
+        if (normalized.includes('actualizar clima') || normalized.includes('refrescar clima') || normalized.includes('actualiza el clima')) {
+          await loadWeather();
+          return;
+        }
+
+        const city = extractCityFromCommand(text);
+        if (city) {
+          voiceOutput.textContent = `Buscando clima en ${city}...`;
+          await fetchWeatherByCity(city);
+          return;
+        }
+
+        if (normalized.includes('mostrar palabras') || normalized.includes('qué dijiste') || normalized.includes('repite')) {
+          voiceOutput.textContent = `La última frase fue: "${text}"`;
+          return;
+        }
+
+        voiceOutput.textContent = `Comando no reconocido: "${text}"`;
       }
 
       function renderHours(dataList) {
@@ -440,16 +493,27 @@
         recognition.interimResults = true;
         recognition.continuous = false;
 
-        recognition.onresult = (event) => {
-          const transcript = Array.from(event.results)
+        recognition.onresult = async (event) => {
+          const interimText = Array.from(event.results)
             .map(result => result[0].transcript)
             .join(' ');
 
-          voiceOutput.textContent = transcript;
+          voiceOutput.textContent = interimText;
+
+          const finalText = Array.from(event.results)
+            .filter(result => result.isFinal)
+            .map(result => result[0].transcript)
+            .join(' ')
+            .trim();
+
+          if (finalText) {
+            await applyVoiceCommand(finalText);
+          }
         };
 
         recognition.onerror = () => {
           voiceOutput.textContent = 'No se pudo reconocer el audio. Intenta de nuevo.';
+          voiceBtn.textContent = 'Escuchar';
         };
 
         recognition.onend = () => {
